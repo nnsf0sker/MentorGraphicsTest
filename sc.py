@@ -13,6 +13,9 @@ def MESH(input_string):
     else:
         return -1;
 
+def toFixed(numObj, digits=0):
+    return f"{numObj:.{digits}f}"
+
 manyOutputError = 0
 
 directrory = os.getcwd()  # Абсолютный путь к папке, где находится программа
@@ -114,9 +117,9 @@ for i in os.listdir(path=logFolderPath):  # Основной цикл, проб�
                     if hasOutput == 0:
                         hasOutput = 1
                         f.write("FAIL: " + relCurrentFolderPath + "/\n")
-                        f.write(buffSet[k] + "(" + str(nLine) + ") " + line)
+                        f.write(buffSet[k] + "(" + str(nLine) + "): " + line)
                         currentOutputFile.write("FAIL: " + relCurrentFolderPath + "/\n")
-                        currentOutputFile.write(buffSet[k] + "(" + str(nLine) + ") " + line)
+                        currentOutputFile.write(buffSet[k] + "(" + str(nLine) + "): " + line)
                         currentOutputFile.close()
                         isError = 1
                         break
@@ -186,11 +189,11 @@ for i in os.listdir(path=logFolderPath):  # Основной цикл, проб�
                         hasOutput = 1
                         f.write("FAIL: " + relCurrentFolderPath + "/\n")
                         f.write(buffSet[k] + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
-                            refMESH) + ", rel.diff=" + str(round(diffMESH - 1, 2)) + ", criterion=0.1)\n")
+                            refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n")
                         currentOutputFile.write("FAIL: " + relCurrentFolderPath + "/\n")
                         currentOutputFile.write(
                             buffSet[k] + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
-                                refMESH) + ", rel.diff=" + str(round(diffMESH - 1, 2)) + ", criterion=0.1)\n")
+                                refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n")
                         currentOutputFile.close()
                     else:
                         manyOutputError = 1
