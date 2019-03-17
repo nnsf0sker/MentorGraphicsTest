@@ -1,14 +1,15 @@
 import os
+import re
 
 def MFSP(input_string):
     if input_string.startswith("Memory Working Set Current = "):
-        return float(input_string[(input_string.index(' Mb') + 31):-3])
+        return float(re.findall(r'[\d]+[\.][\d]*', input_string)[1])
     else:
         return -1
 
 def MESH(input_string):
     if input_string.startswith("MESH::Bricks: Total="):
-        return (int(input_string[20:(input_string.index('Gas') - 1)]))
+        return (int(re.findall(r'[\d]+', input_string)[0]))
     else:
         return -1;
 
