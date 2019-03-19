@@ -2,88 +2,77 @@ import os
 import re
 
 def MFSP(input_string):
-    if input_string.startswith("Memory Working Set Current = "):
-        return float(re.findall(r'[\d]+[\.][\d]*', input_string)[1])
-    else:
+    tmpString = re.findall(r'Memory Working Set Current = [\d\.]+ Mb, Memory Working Set Peak = [\d\.]+ Mb', input_string)
+    if len(tmpString) != 1:
+        return -1
+    tmpString = re.findall(r'[\d\.]+', input_string)
+    try:
+        return float(tmpString[1])
+    except NotNumb:
         return -1
 
 def MESH(input_string):
-    if input_string.startswith("MESH::Bricks: Total="):
-        return (int(re.findall(r'[\d]+', input_string)[0]))
-    else:
-        return -1;
+    tmpString = re.findall(r'MESH::Bricks: Total=[\d\.]+ Gas=[\d\.]+ Solid=[\d\.]+ Partial=[\d\.]+ Irregular=[\d\.]+\n', input_string)
+    if len(tmpString) != 1:
+        return -1
+    tmpString = re.findall(r'[\d\.]+', input_string)
+    try:
+        return int(tmpString[0])
+    except NotNumb:
+        return -1
 
 def toFixed(numObj, digits=0):
     return f"{numObj:.{digits}f}"
 
+def regularOuput(outputText_,  *files):
+    print(outputText_, end="")
+    for file in files:
+        file.write(outputText_)
+
 def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *parameters_):
     global hasOutput
-
     if hasOutput == 1:
         return
-
     hasOutput = 1
 
     if type == 1:  # "1" соостветствует случаю, когда отсутствует папка ft_reference или ft_run
-        mainOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        mainOutputFile_.write("directory missing: " + parameters_[0] + "\n")
-        localOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        localOutputFile_.write("directory missing: " + parameters_[0] + "\n")
+        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + "directory missing: " + parameters_[0] + "\n" # parameters_[0] - это название отсутствующей папки
+        regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
     elif type == 2:  # "2" соостветствует случаю, когда *.stdout файлы в папках ft_reference и ft_run не совпадают
-        mainOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        currentOutputFile.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-
         ft_referenceDirs = parameters_[0]
         ft_runDirs = parameters_[1]
-
-        buffSet = list(ft_referenceDirs - ft_runDirs)
-        if (len(buffSet) != 0):
-            mainOutputFile_.write("In ft_run there are missing files present in ft_reference: ")
-            localOutputFile_.write("In ft_run there are missing files present in ft_reference: ")
-
-            for m in range(len(buffSet)):
-                mainOutputFile_.write("'" + buffSet[m] + "'")
-                localOutputFile_.write("'" + buffSet[m] + "'")
-                if m == (len(buffSet) - 1):
-                    mainOutputFile_.write("\n")
-                    localOutputFile_.write("\n")
-                else:
-                    mainOutputFile_.write(" ")
-                    localOutputFile_.write(" ")
-
-        buffSet = list(ft_runDirs - ft_referenceDirs)
-        if (len(buffSet) != 0):
-            mainOutputFile_.write("In ft_run there are extra files files not present in ft_reference: ")
-            localOutputFile_.write("In ft_run there are extra files files not present in ft_reference: ")
-            for m in range(len(buffSet)):
-                mainOutputFile_.write("'" + buffSet[m] + "'")
-                localOutputFile_.write("'" + buffSet[m] + "'")
-                if m == (len(buffSet) - 1):
-                    mainOutputFile_.write("\n")
-                    localOutputFile_.write("\n")
-                else:
-                    mainOutputFile_.write(" ")
-                    localOutputFile_.write(" ")
+        step = 0
+        for buff_ in [list(ft_referenceDirs - ft_runDirs), list(ft_runDirs - ft_referenceDirs)]:
+            outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
+            if (len(buff_) != 0):
+                if step == 0:
+                    outputText = outputText + "In ft_run there are missing files present in ft_reference: "
+                elif step == 1:
+                    outputText = outputText + "In ft_run there are extra files files not present in ft_reference: "
+                for m in range(len(buff_)):
+                    outputText = outputText + "'" + goodViewPath(buff_[m]) + "'"
+                    if m == (len(buff_) - 1):
+                        outputText = outputText + "\n"
+                    else:
+                        outputText = outputText + " "
+            regularOuput(outputText, mainOutputFile_, localOutputFile_)
+            step = step + 1
         localOutputFile_.close()
 
     elif type == 3:  # "3" соответствует выводу, когда в *stdout - файле папки ft_rub есть слово "ERROR"
         buffSetFile_ = parameters_[0]
         nLine_ = parameters_[1]
         line_ = parameters_[2]
-        mainOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        mainOutputFile_.write(buffSetFile_ + "(" + str(nLine_) + "): " + line_)
-        localOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        localOutputFile_.write(buffSetFile_ + "(" + str(nLine_) + "): " + line_)
+        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSetFile_) + "(" + str(nLine_) + "): " + line_
+        regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
     elif type == 4:  # "4" соответствует выводу, когда в *stdout - файле папки ft_rub нет строки 'Solver finished at'
-        buffSet_ = parameters_[0]
-        mainOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        mainOutputFile_.write(buffSet_ + ": missing 'Solver finished at'\n")
-        localOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        localOutputFile_.write(buffSet_ + ": missing 'Solver finished at'\n")
+        buffSetFile_ = parameters_[0]
+        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSetFile_) + ": missing 'Solver finished at'\n"
+        regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
     elif type == 5:  # "5" соответствует выводу, когда MFSP различается более чем в 4 раза
@@ -91,14 +80,10 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
         runMaxim = parameters_[1]
         refMaxim = parameters_[2]
         diffMax = parameters_[3]
-        mainOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        mainOutputFile_.write(buffSet_ + ": different 'Memory Working Set Peak' (ft_run=" + str(
+        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSet_) + ": different 'Memory Working Set Peak' (ft_run=" + str(
             runMaxim) + ", ft_reference=" + str(refMaxim) + ", rel.diff=" + str(
-            round(diffMax - 1, 2)) + ", criterion=4)\n")
-        localOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        localOutputFile_.write(buffSet_ + ": different 'Memory Working Set Peak' (ft_run=" + str(
-            runMaxim) + ", ft_reference=" + str(refMaxim) + ", rel.diff=" + str(
-            round(diffMax - 1, 2)) + ", criterion=4)\n")
+            round(diffMax - 1, 2)) + ", criterion=4)\n"
+        regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
     elif type == 6:  #
@@ -106,20 +91,15 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
         runMESH = parameters_[1]
         refMESH = parameters_[2]
         diffMESH = parameters_[3]
-        mainOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        mainOutputFile_.write(buffSet_ + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
-            refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n")
-        localOutputFile_.write("FAIL: " + relCurrentFolderPath_ + "/\n")
-        localOutputFile_.write(
-            buffSet_ + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
-                refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n")
+        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSet_) + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
+                refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n"
+        regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
-    elif type == 7:
-        if type == 7:  # "0" соостветствует случаю, когда тесты прошли успешно
-            mainOutputFile_.write("OK: " + relCurrentFolderPath_ + "/\n")
-            localOutputFile_.write("OK: " + relCurrentFolderPath_ + "/\n")
-            localOutputFile_.close()
+    elif type == 7:  # "0" соостветствует случаю, когда тесты прошли успешно
+        outputText = "OK: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
+        regularOuput(outputText, mainOutputFile_)
+        localOutputFile_.close()
 
 def dirSetFilling(setName_, folderPath_):
     for k in os.walk(folderPath_):
@@ -127,20 +107,21 @@ def dirSetFilling(setName_, folderPath_):
             if k[2][l].endswith(".stdout") == True:
                 setName_.add(os.path.relpath(os.path.join(k[0], k[2][l]), folderPath_))
 
+def goodViewPath(path):
+    return path.replace(os.sep, '/')
+
 tmpList = [0, 0, 0]
 
-directrory = os.getcwd()  # Абсолютный путь к папке, где находится программа
-
-logFolderPath = os.path.join(directrory, "logs")  # Абсолютный путь к папке log
+logFolderPath = os.path.join(os.getcwd(), "logs")  # Абсолютный путь к папке log
 
 f = open('reference_result.txt', 'tw')  # Файл, куда будем писать результаты тестов
 
 tmpList[0] = f
 
 for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, пробегающий по всем подпапкам всех папок log
-    firstSubfoldPath = os.path.join(logFolderPath, i)
+    firstSubfoldPath = os.path.join(logFolderPath, i)  # Абсолютный путь до 1-й подпапки
     for j in sorted(os.listdir(path=firstSubfoldPath)):
-        secondSubfoldPath = os.path.join(firstSubfoldPath, j)  # Абсолютный путь к текущей папке
+        secondSubfoldPath = os.path.join(firstSubfoldPath, j)  # Абсолютный путь до 2-й (текущей) папки
         relCurrentFolderPath = os.path.join(i, j)  # Относительный путь папки текущего теста (для вывода)
         hasOutput = 0  # Флаг, был ли вывод для данного теста
         currentOutputFile = open(os.path.join(secondSubfoldPath, "report.txt"), 'tw')  # Путь к промежуточному файлу вывода
@@ -153,7 +134,6 @@ for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, �
                 LogOutput(*tmpList, 1, chekingFolder)
                 folderExsistError = 1
                 break
-                # Записываем в файл отсутствие папки
         if folderExsistError == 1:
             continue
 
