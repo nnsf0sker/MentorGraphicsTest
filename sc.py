@@ -8,7 +8,7 @@ def MFSP(input_string):
     tmpString = re.findall(r'[\d\.]+', input_string)
     try:
         return float(tmpString[1])
-    except NotNumb:
+    except NaN:
         return -1
 
 def MESH(input_string):
@@ -18,7 +18,7 @@ def MESH(input_string):
     tmpString = re.findall(r'[\d\.]+', input_string)
     try:
         return int(tmpString[0])
-    except NotNumb:
+    except NaN:
         return -1
 
 def toFixed(numObj, digits=0):
@@ -79,7 +79,7 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
         buffSet_ = parameters_[0]
         runMaxim = parameters_[1]
         refMaxim = parameters_[2]
-        diffMax = parameters_[3]
+        diffMax = max(runMaxim, refMaxim) / min(runMaxim, refMaxim)
         outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSet_) + ": different 'Memory Working Set Peak' (ft_run=" + str(
             runMaxim) + ", ft_reference=" + str(refMaxim) + ", rel.diff=" + str(
             round(diffMax - 1, 2)) + ", criterion=4)\n"
@@ -90,7 +90,7 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
         buffSet_ = parameters_[0]
         runMESH = parameters_[1]
         refMESH = parameters_[2]
-        diffMESH = parameters_[3]
+        diffMESH = max(runMESH, refMESH) / min(runMESH, refMESH)
         outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSet_) + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
                 refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n"
         regularOuput(outputText, mainOutputFile_, localOutputFile_)
@@ -110,6 +110,75 @@ def dirSetFilling(setName_, folderPath_):
 def goodViewPath(path):
     return path.replace(os.sep, '/')
 
+def folderExsistCheck (absFolderPath_, *tmpList):
+    for chekingFolder in ["ft_reference", "ft_run"]:
+        if os.path.exists(os.path.join(absFolderPath_, chekingFolder)) != True:
+            LogOutput(*tmpList, 1, chekingFolder)
+            return -1
+    return 1
+
+def folderMatching (testFolderPath, *tmpList):
+    ft_runFolderPath = os.path.join(testFolderPath, "ft_run")  # Абсолютный путь до папки ft_run текущего теста
+    ft_referenceFolderPath = os.path.join(testFolderPath, "ft_reference")  # Абсолютный путь до папки ft_reference текущего теста
+    ft_runDirs = set()  # Множество, содержащее подпапки ft_run
+    ft_referenceDirs = set()  # Множество, содержащее подпапки ft_reference
+    for p in [[ft_runDirs, ft_runFolderPath], [ft_referenceDirs, ft_referenceFolderPath]]:  # Заполнение множеств папок с *.stdout файлами
+        dirSetFilling(*p)
+    if ft_runDirs != ft_referenceDirs:  # Вывод в случае, если *.stdout файлы в ft_run и ft_reference не совпадают
+        LogOutput(*tmpList, 2, ft_referenceDirs, ft_runDirs)
+        return -1, list(set())
+    return 1, list(ft_runDirs)
+
+def ft_runFileCheck (filePath_, *parameters_):
+    fileName = parameters_[0]
+    ft_runFile = open(filePath_, 'tr')
+    nLine = 1
+    isFlag = 0
+    runMaxim = -1
+    runMESH = -1
+    for line in ft_runFile:
+        if "ERROR" in line.upper():
+            LogOutput(*tmpList, 3, fileName, nLine, line)
+            return -1, -1
+        if MFSP(line) > runMaxim:
+            runMaxim = MFSP(line)
+        if MESH(line) > 0:
+            runMESH = MESH(line)
+        if line.startswith("Solver finished at"):
+            isFlag = 1
+        nLine = nLine + 1
+    ft_runFile.close()
+    if isFlag == 0:
+        LogOutput(*tmpList, 4, fileName)
+        return -1, -1
+    else:
+        return runMaxim, runMESH
+
+def ft_referenceFileCheck(filePath_):
+    refMaxim = -1
+    refMESH = -1
+    ft_referenceFile = open(filePath_, 'tr')
+    for line in ft_referenceFile:
+        if MFSP(line) > refMaxim:
+            refMaxim = MFSP(line)
+        if MESH(line) > 0:
+            refMESH = MESH(line)
+    ft_referenceFile.close()
+    return refMaxim, refMESH
+
+def crossFileCheck(folderPath_, setOfDirs, *tmpList):
+    for k in range(len(setOfDirs)):
+        runTemp = ft_runFileCheck(os.path.join(folderPath_, "ft_run", setOfDirs[k]), setOfDirs[k])
+        if runTemp[0] == -1:
+            continue
+        refTemp = ft_referenceFileCheck(os.path.join(folderPath_, "ft_reference", setOfDirs[k]))
+        if refTemp[0] == -1:
+            continue
+        if max(runTemp[0], refTemp[0]) / min(runTemp[0], refTemp[0]) > 4:
+            LogOutput(*tmpList, 5, buffSet[k], runTemp[0], refTemp[0])
+        if (max(runTemp[1], refTemp[1]) / min(runTemp[1], refTemp[1]) - 1) > 0.1:
+            LogOutput(*tmpList, 6, buffSet[k], runTemp[1], refTemp[1])
+
 tmpList = [0, 0, 0]
 
 logFolderPath = os.path.join(os.getcwd(), "logs")  # Абсолютный путь к папке log
@@ -123,86 +192,19 @@ for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, �
     for j in sorted(os.listdir(path=firstSubfoldPath)):
         secondSubfoldPath = os.path.join(firstSubfoldPath, j)  # Абсолютный путь до 2-й (текущей) папки
         relCurrentFolderPath = os.path.join(i, j)  # Относительный путь папки текущего теста (для вывода)
-        hasOutput = 0  # Флаг, был ли вывод для данного теста
+        hasOutput = 0  # Флаг, был ли вывод
         currentOutputFile = open(os.path.join(secondSubfoldPath, "report.txt"), 'tw')  # Путь к промежуточному файлу вывода
         tmpList[1] = currentOutputFile
         tmpList[2] = relCurrentFolderPath
 
-        folderExsistError = 0
-        for chekingFolder in ["ft_reference", "ft_run"]:
-            if os.path.exists(os.path.join(secondSubfoldPath, chekingFolder)) != True:
-                LogOutput(*tmpList, 1, chekingFolder)
-                folderExsistError = 1
-                break
-        if folderExsistError == 1:
+        if folderExsistCheck(secondSubfoldPath, *tmpList) != 1:
             continue
 
-        ft_runFolderPath = os.path.join(secondSubfoldPath, "ft_run")  # Абсолютный путь до папки ft_run текущего теста
-        ft_referenceFolderPath = os.path.join(secondSubfoldPath, "ft_reference")  # Абсолютный путь до папки ft_reference текущего теста
-
-        ft_runDirs = set()  # Множество, содержащее подпапки ft_run
-        ft_referenceDirs = set()  # Множество, содержащее подпапки ft_reference
-
-        for p in [[ft_runDirs, ft_runFolderPath], [ft_referenceDirs, ft_referenceFolderPath]]:  # Заполнение множеств папок с *.stdout файлами
-            dirSetFilling(*p)
-
-        if ft_runDirs != ft_referenceDirs:  # Вывод в случае, если *.stdout файлы в ft_run и ft_reference не совпадают
-            LogOutput(*tmpList, 2, ft_referenceDirs, ft_runDirs)
+        flag, buffSet = folderMatching(secondSubfoldPath, *tmpList)
+        if flag != 1:
             continue
 
-        buffSet = list(ft_runDirs)
-        for k in range(len(buffSet)):
-            ft_runFile = open(os.path.join(ft_runFolderPath, buffSet[k]), 'tr')
-            nLine = 1
-            isError = 0
-            isFlag = 0
-
-            runMaxim = -1
-            runMESH = -1
-
-            for line in ft_runFile:
-                if MFSP(line) > runMaxim:
-                    runMaxim = MFSP(line)
-
-                if MESH(line) > 0:
-                    runMESH = MESH(line)
-
-                if "ERROR" in line.upper():
-                    LogOutput(*tmpList, 3, buffSet[k], nLine, line)
-                    isError = 1
-                    break
-
-                if line.startswith("Solver finished at"):
-                    isFlag = 1
-                nLine = nLine + 1
-
-            if (isError == 0) & (isFlag == 0):
-                LogOutput(*tmpList, 4, buffSet[k])
-            ft_runFile.close()
-
-            if (isError == 0) & (isFlag == 1):
-                ft_referenceFile = open(os.path.join(ft_referenceFolderPath, buffSet[k]), 'tr')
-
-                refMaxim = -1
-                refMESH = -1
-
-                for line in ft_referenceFile:
-                    if MFSP(line) > refMaxim:
-                        refMaxim = MFSP(line)
-                    if MESH(line) > 0:
-                        refMESH = MESH(line)
-
-                diffMax = max(runMaxim, refMaxim) / min(runMaxim, refMaxim)
-                diffMESH = max(runMESH, refMESH) / min(runMESH, refMESH)
-
-                if diffMax > 4:
-                    LogOutput(*tmpList, 5, buffSet[k], runMaxim, refMaxim, diffMax)
-
-                if (diffMESH - 1) > 0.1:
-                    LogOutput(*tmpList, 6, buffSet[k], runMESH, refMESH, diffMESH)
-
-                ft_referenceFile.close()
-                ft_runFile.close()
+        crossFileCheck(secondSubfoldPath, buffSet, *tmpList)
 
         LogOutput(*tmpList, 7)  # Запустится только, если вывода ещё не было
 
