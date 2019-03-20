@@ -1,24 +1,21 @@
 import os
 import re
 
-def MFSP(input_string):
-    tmpString = re.findall(r'Memory Working Set Current = [\d\.]+ Mb, Memory Working Set Peak = [\d\.]+ Mb', input_string)
-    if len(tmpString) != 1:
-        return -1
-    tmpString = re.findall(r'[\d\.]+', input_string)
-    try:
-        return float(tmpString[1])
-    except NaN:
+pat1 = re.compile(r'Memory Working Set Current\s+=\s+([0-9]*\.[0-9]+|[0-9]+)\s+Mb, Memory Working Set Peak\s+=\s+([0-9]*\.[0-9]+|[0-9]+)\s+Mb')
+pat2 = re.compile(r'MESH::Bricks: Total=([0-9]+)\s+Gas=([0-9]+)\s+Solid=([0-9]+)\s+Partial=([0-9]+)\s+Irregular=([0-9]+)')
+
+def MFSP(src):
+    res = pat1.findall(src)
+    if res and len(res[0]) == 2:
+        return float(res[0][1])
+    else:
         return -1
 
-def MESH(input_string):
-    tmpString = re.findall(r'MESH::Bricks: Total=[\d\.]+ Gas=[\d\.]+ Solid=[\d\.]+ Partial=[\d\.]+ Irregular=[\d\.]+\n', input_string)
-    if len(tmpString) != 1:
-        return -1
-    tmpString = re.findall(r'[\d\.]+', input_string)
-    try:
-        return int(tmpString[0])
-    except NaN:
+def MESH(src):
+    res = pat2.findall(src)
+    if res and len(res[0]) == 5:
+        return float(res[0][0])
+    else:
         return -1
 
 def toFixed(numObj, digits=0):
@@ -44,8 +41,8 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
         ft_referenceDirs = parameters_[0]
         ft_runDirs = parameters_[1]
         step = 0
+        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
         for buff_ in [list(ft_referenceDirs - ft_runDirs), list(ft_runDirs - ft_referenceDirs)]:
-            outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
             if (len(buff_) != 0):
                 if step == 0:
                     outputText = outputText + "In ft_run there are missing files present in ft_reference: "
@@ -57,8 +54,8 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
                         outputText = outputText + "\n"
                     else:
                         outputText = outputText + " "
-            regularOuput(outputText, mainOutputFile_, localOutputFile_)
             step = step + 1
+        regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
     elif type == 3:  # "3" соответствует выводу, когда в *stdout - файле папки ft_rub есть слово "ERROR"
@@ -96,7 +93,7 @@ def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *p
         regularOuput(outputText, mainOutputFile_, localOutputFile_)
         localOutputFile_.close()
 
-    elif type == 7:  # "0" соостветствует случаю, когда тесты прошли успешно
+    elif type == 7:  # "7" соостветствует случаю, когда тесты прошли успешно
         outputText = "OK: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
         regularOuput(outputText, mainOutputFile_)
         localOutputFile_.close()
@@ -129,55 +126,60 @@ def folderMatching (testFolderPath, *tmpList):
         return -1, list(set())
     return 1, list(ft_runDirs)
 
-def ft_runFileCheck (filePath_, *parameters_):
-    fileName = parameters_[0]
-    ft_runFile = open(filePath_, 'tr')
-    nLine = 1
-    isFlag = 0
+def ft_FileCheck (filePath_, type , *parameters_):
+    if type == 'ft_run':
+        fileName = parameters_[0]
+        nLine = 1
+        isFlag = 0
     runMaxim = -1
     runMESH = -1
+    ft_runFile = open(filePath_, 'tr')
     for line in ft_runFile:
-        if "ERROR" in line.upper():
-            LogOutput(*tmpList, 3, fileName, nLine, line)
-            return -1, -1
-        if MFSP(line) > runMaxim:
-            runMaxim = MFSP(line)
-        if MESH(line) > 0:
-            runMESH = MESH(line)
-        if line.startswith("Solver finished at"):
-            isFlag = 1
-        nLine = nLine + 1
-    ft_runFile.close()
-    if isFlag == 0:
-        LogOutput(*tmpList, 4, fileName)
-        return -1, -1
-    else:
-        return runMaxim, runMESH
+        if type == 'ft_run':
+            if "ERROR" in line.upper():
+                ft_runFile.close()
+                return [-1, nLine, line]
+            if line.startswith("Solver finished at"):
+                isFlag = 1
+            nLine = nLine + 1
+        tmp = MFSP(line)
+        if tmp > runMaxim:
+            runMaxim = tmp
+        tmp = MESH(line)
+        if tmp > 0:
+            runMESH = tmp
 
-def ft_referenceFileCheck(filePath_):
-    refMaxim = -1
-    refMESH = -1
-    ft_referenceFile = open(filePath_, 'tr')
-    for line in ft_referenceFile:
-        if MFSP(line) > refMaxim:
-            refMaxim = MFSP(line)
-        if MESH(line) > 0:
-            refMESH = MESH(line)
-    ft_referenceFile.close()
-    return refMaxim, refMESH
+    ft_runFile.close()
+    if type == 'ft_run':
+        if isFlag == 0:
+            return [-2, *tmpList, 4, fileName]
+    return runMaxim, runMESH
 
 def crossFileCheck(folderPath_, setOfDirs, *tmpList):
     for k in range(len(setOfDirs)):
-        runTemp = ft_runFileCheck(os.path.join(folderPath_, "ft_run", setOfDirs[k]), setOfDirs[k])
+        runTemp = ft_FileCheck(os.path.join(folderPath_, "ft_run", setOfDirs[k]), 'ft_run', setOfDirs[k])
         if runTemp[0] == -1:
+            LogOutput(*tmpList, 3, setOfDirs[k], runTemp[1], runTemp[2])
             continue
-        refTemp = ft_referenceFileCheck(os.path.join(folderPath_, "ft_reference", setOfDirs[k]))
+        if runTemp[0] == -2:
+            LogOutput(*tmpList, 4, setOfDirs[k])
+            continue
+        refTemp = ft_FileCheck (os.path.join(folderPath_, "ft_reference", setOfDirs[k]), 'ft_reference')
         if refTemp[0] == -1:
             continue
         if max(runTemp[0], refTemp[0]) / min(runTemp[0], refTemp[0]) > 4:
-            LogOutput(*tmpList, 5, buffSet[k], runTemp[0], refTemp[0])
-        if (max(runTemp[1], refTemp[1]) / min(runTemp[1], refTemp[1]) - 1) > 0.1:
-            LogOutput(*tmpList, 6, buffSet[k], runTemp[1], refTemp[1])
+            LogOutput(*tmpList, 5, setOfDirs[k], runTemp[0], refTemp[0])
+        if (max(runTemp[1], refTemp[1]) / min(runTemp[1], refTemp[1])) - 1 > 0.1:
+            LogOutput(*tmpList, 6, setOfDirs[k], runTemp[1], refTemp[1])
+
+def oneTestCheck(folderPath_, *tmpList):
+    if folderExsistCheck(folderPath_, *tmpList) != 1:
+        return -1
+    flag, buffSet = folderMatching(folderPath_, *tmpList)
+    if flag != 1:
+        return -1
+    crossFileCheck(folderPath_, buffSet, *tmpList)
+    return 1
 
 tmpList = [0, 0, 0]
 
@@ -197,15 +199,7 @@ for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, �
         tmpList[1] = currentOutputFile
         tmpList[2] = relCurrentFolderPath
 
-        if folderExsistCheck(secondSubfoldPath, *tmpList) != 1:
+        if oneTestCheck(secondSubfoldPath, *tmpList) != 1:
             continue
-
-        flag, buffSet = folderMatching(secondSubfoldPath, *tmpList)
-        if flag != 1:
-            continue
-
-        crossFileCheck(secondSubfoldPath, buffSet, *tmpList)
-
         LogOutput(*tmpList, 7)  # Запустится только, если вывода ещё не было
-
 f.close()
