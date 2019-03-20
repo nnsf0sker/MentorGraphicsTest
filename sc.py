@@ -145,6 +145,7 @@ def ft_FileCheck (filePath_, type , *parameters_):
         tmp = MFSP(line)
         if tmp > runMaxim:
             runMaxim = tmp
+            continue
         tmp = MESH(line)
         if tmp > 0:
             runMESH = tmp
