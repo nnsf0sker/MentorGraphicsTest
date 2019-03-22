@@ -27,11 +27,6 @@ def regularOuput(outputText_,  *files):
         file.write(outputText_)
 
 def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *parameters_):
-    global hasOutput
-    if hasOutput == 1:
-        return
-    hasOutput = 1
-
     if type == 1:  # "1" соостветствует случаю, когда отсутствует папка ft_reference или ft_run
         outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + "directory missing: " + parameters_[0] + "\n" # parameters_[0] - это название отсутствующей папки
         regularOuput(outputText, mainOutputFile_, localOutputFile_)
@@ -165,13 +160,17 @@ def crossFileCheck(folderPath_, setOfDirs, *tmpList):
         if runTemp[0] == -2:
             LogOutput(*tmpList, 4, setOfDirs[k])
             continue
-        refTemp = ft_FileCheck (os.path.join(folderPath_, "ft_reference", setOfDirs[k]), 'ft_reference')
+        refTemp = ft_FileCheck(os.path.join(folderPath_, "ft_reference", setOfDirs[k]), 'ft_reference')
         if refTemp[0] == -1:
             continue
         if max(runTemp[0], refTemp[0]) / min(runTemp[0], refTemp[0]) > 4:
             LogOutput(*tmpList, 5, setOfDirs[k], runTemp[0], refTemp[0])
+            continue
         if (max(runTemp[1], refTemp[1]) / min(runTemp[1], refTemp[1])) - 1 > 0.1:
             LogOutput(*tmpList, 6, setOfDirs[k], runTemp[1], refTemp[1])
+            continue
+        LogOutput(*tmpList, 7)
+
 
 def oneTestCheck(folderPath_, *tmpList):
     if folderExsistCheck(folderPath_, *tmpList) != 1:
@@ -202,5 +201,5 @@ for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, �
 
         if oneTestCheck(secondSubfoldPath, *tmpList) != 1:
             continue
-        LogOutput(*tmpList, 7)  # Запустится только, если вывода ещё не было
+
 f.close()
