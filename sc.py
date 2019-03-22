@@ -194,7 +194,6 @@ for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, �
     for j in sorted(os.listdir(path=firstSubfoldPath)):
         secondSubfoldPath = os.path.join(firstSubfoldPath, j)  # Абсолютный путь до 2-й (текущей) папки
         relCurrentFolderPath = os.path.join(i, j)  # Относительный путь папки текущего теста (для вывода)
-        hasOutput = 0  # Флаг, был ли вывод
         currentOutputFile = open(os.path.join(secondSubfoldPath, "report.txt"), 'tw')  # Путь к промежуточному файлу вывода
         tmpList[1] = currentOutputFile
         tmpList[2] = relCurrentFolderPath
