@@ -26,180 +26,145 @@ def regularOuput(outputText_,  *files):
     for file in files:
         file.write(outputText_)
 
-def LogOutput(mainOutputFile_, localOutputFile_, relCurrentFolderPath_, type, *parameters_):
-    if type == 1:  # "1" соостветствует случаю, когда отсутствует папка ft_reference или ft_run
-        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + "directory missing: " + parameters_[0] + "\n" # parameters_[0] - это название отсутствующей папки
-        regularOuput(outputText, mainOutputFile_, localOutputFile_)
-        localOutputFile_.close()
-
-    elif type == 2:  # "2" соостветствует случаю, когда *.stdout файлы в папках ft_reference и ft_run не совпадают
-        ft_referenceDirs = parameters_[0]
-        ft_runDirs = parameters_[1]
-        step = 0
-        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
-        for buff_ in [list(ft_referenceDirs - ft_runDirs), list(ft_runDirs - ft_referenceDirs)]:
-            if (len(buff_) != 0):
-                if step == 0:
-                    outputText = outputText + "In ft_run there are missing files present in ft_reference: "
-                elif step == 1:
-                    outputText = outputText + "In ft_run there are extra files files not present in ft_reference: "
-                for m in range(len(buff_)):
-                    outputText = outputText + "'" + goodViewPath(buff_[m]) + "'"
-                    if m == (len(buff_) - 1):
-                        outputText = outputText + "\n"
-                    else:
-                        outputText = outputText + " "
-            step = step + 1
-        regularOuput(outputText, mainOutputFile_, localOutputFile_)
-        localOutputFile_.close()
-
-    elif type == 3:  # "3" соответствует выводу, когда в *stdout - файле папки ft_rub есть слово "ERROR"
-        buffSetFile_ = parameters_[0]
-        nLine_ = parameters_[1]
-        line_ = parameters_[2]
-        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSetFile_) + "(" + str(nLine_) + "): " + line_
-        regularOuput(outputText, mainOutputFile_, localOutputFile_)
-        localOutputFile_.close()
-
-    elif type == 4:  # "4" соответствует выводу, когда в *stdout - файле папки ft_rub нет строки 'Solver finished at'
-        buffSetFile_ = parameters_[0]
-        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSetFile_) + ": missing 'Solver finished at'\n"
-        regularOuput(outputText, mainOutputFile_, localOutputFile_)
-        localOutputFile_.close()
-
-    elif type == 5:  # "5" соответствует выводу, когда MFSP различается более чем в 4 раза
-        buffSet_ = parameters_[0]
-        runMaxim = parameters_[1]
-        refMaxim = parameters_[2]
-        diffMax = max(runMaxim, refMaxim) / min(runMaxim, refMaxim)
-        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSet_) + ": different 'Memory Working Set Peak' (ft_run=" + str(
-            runMaxim) + ", ft_reference=" + str(refMaxim) + ", rel.diff=" + str(
-            round(diffMax - 1, 2)) + ", criterion=4)\n"
-        regularOuput(outputText, mainOutputFile_, localOutputFile_)
-        localOutputFile_.close()
-
-    elif type == 6:  #
-        buffSet_ = parameters_[0]
-        runMESH = parameters_[1]
-        refMESH = parameters_[2]
-        diffMESH = max(runMESH, refMESH) / min(runMESH, refMESH)
-        outputText = "FAIL: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n" + goodViewPath(buffSet_) + ": different 'Total' of bricks (ft_run=" + str(runMESH) + ", ft_reference=" + str(
-                refMESH) + ", rel.diff=" + str(toFixed(diffMESH - 1, 2)) + ", criterion=0.1)\n"
-        regularOuput(outputText, mainOutputFile_, localOutputFile_)
-        localOutputFile_.close()
-
-    elif type == 7:  # "7" соостветствует случаю, когда тесты прошли успешно
-        outputText = "OK: " + goodViewPath(relCurrentFolderPath_+os.sep) + "\n"
-        regularOuput(outputText, mainOutputFile_)
-        localOutputFile_.close()
-
-def dirSetFilling(setName_, folderPath_):
+def dirSetFilling(folderPath_):
+    result = set()
     for k in os.walk(folderPath_):
         for l in range(len(k[2])):
             if k[2][l].endswith(".stdout") == True:
-                setName_.add(os.path.relpath(os.path.join(k[0], k[2][l]), folderPath_))
+                result.add(os.path.relpath(os.path.join(k[0], k[2][l]), folderPath_))
+    return result
 
 def goodViewPath(path):
     return path.replace(os.sep, '/')
 
-def folderExsistCheck (absFolderPath_, *tmpList):
-    for chekingFolder in ["ft_reference", "ft_run"]:
+def folderExsistCheck (absFolderPath_, *dirs):
+    for chekingFolder in dirs:
         if os.path.exists(os.path.join(absFolderPath_, chekingFolder)) != True:
-            LogOutput(*tmpList, 1, chekingFolder)
+            reportFile = open(os.path.join(absFolderPath_, "report.txt"), 'tw')
+            reportFile.write("directory missing: " + str(chekingFolder) + "\n")
+            reportFile.close()
             return -1
-    return 1
+    return 0
 
-def folderMatching (testFolderPath, *tmpList):
+def folderMatching (testFolderPath):
     ft_runFolderPath = os.path.join(testFolderPath, "ft_run")  # Абсолютный путь до папки ft_run текущего теста
     ft_referenceFolderPath = os.path.join(testFolderPath, "ft_reference")  # Абсолютный путь до папки ft_reference текущего теста
-    ft_runDirs = set()  # Множество, содержащее подпапки ft_run
-    ft_referenceDirs = set()  # Множество, содержащее подпапки ft_reference
-    for p in [[ft_runDirs, ft_runFolderPath], [ft_referenceDirs, ft_referenceFolderPath]]:  # Заполнение множеств папок с *.stdout файлами
-        dirSetFilling(*p)
-    if ft_runDirs != ft_referenceDirs:  # Вывод в случае, если *.stdout файлы в ft_run и ft_reference не совпадают
-        LogOutput(*tmpList, 2, ft_referenceDirs, ft_runDirs)
-        return -1, list(set())
-    return 1, list(ft_runDirs)
+    ft_runDirs = list(dirSetFilling(ft_runFolderPath))  # Множество, содержащее подпапки ft_run
+    ft_referenceDirs = list(dirSetFilling(ft_referenceFolderPath))  # Множество, содержащее подпапки ft_reference
 
-def ft_FileCheck (filePath_, type , *parameters_):
+    if ft_runDirs != ft_referenceDirs:
+        reportFile = open(os.path.join(testFolderPath, "report.txt"), 'tw')
+        outputText = ""
+        step = 0
+        for buff in [ft_runDirs, ft_referenceDirs]:
+            if len(buff) != 0:
+                if step == 0:
+                    outputText = outputText + "In ft_run there are extra files files not present in ft_reference: "
+                elif step == 1:
+                    outputText = outputText + "In ft_run there are missing files present in ft_reference: "
+                for m in range(len(buff)):
+                    outputText = outputText + "'" + goodViewPath(buff[m]) + "'"
+                    if m == (len(buff) - 1):
+                        outputText = outputText + "\n"
+                    else:
+                        outputText = outputText + " "
+            step = step + 1
+        reportFile.write(outputText)
+        reportFile.close()
+        return -1
+    return ft_runDirs
+
+def ft_FileCheck (filePath_, type ):
     if type == 'ft_run':
-        fileName = parameters_[0]
-        nLine = 1
         isFlag = 0
+    nLine = 1
     runMaxim = -1
     runMESH = -1
-    ft_runFile = open(filePath_, 'tr')
-    for line in ft_runFile:
+    ft_File = open(filePath_, 'tr')
+    for line in ft_File:
         if type == 'ft_run':
             if "ERROR" in line.upper():
-                ft_runFile.close()
-                return [-1, nLine, line]
+                ft_File.close()
+                return -3, filePath_, nLine, line,
             if line.startswith("Solver finished at"):
                 isFlag = 1
             nLine = nLine + 1
-        tmp = MFSP(line)
-        if tmp > runMaxim:
-            runMaxim = tmp
+        tmp1 = MFSP(line)
+        if tmp1 > runMaxim:
+            runMaxim = tmp1
             continue
-        tmp = MESH(line)
-        if tmp > 0:
-            runMESH = tmp
+        tmp2 = MESH(line)
+        if tmp2 > 0:
+            runMESH = tmp2
 
-    ft_runFile.close()
+    ft_File.close()
     if type == 'ft_run':
         if isFlag == 0:
-            return [-2, *tmpList, 4, fileName]
+            return -4, filePath_, nLine, line
     return runMaxim, runMESH
 
-def crossFileCheck(folderPath_, setOfDirs, *tmpList):
-    for k in range(len(setOfDirs)):
-        runTemp = ft_FileCheck(os.path.join(folderPath_, "ft_run", setOfDirs[k]), 'ft_run', setOfDirs[k])
-        if runTemp[0] == -1:
-            LogOutput(*tmpList, 3, setOfDirs[k], runTemp[1], runTemp[2])
+def crossFileCheck(folderPath_, listOfDirs):
+    errorFlag = 0
+    reportFile = open(os.path.join(folderPath_, "report.txt"), 'wt')
+    for k in range(len(listOfDirs)):
+        tmp1 = ft_FileCheck(os.path.join(folderPath_, "ft_run", listOfDirs[k]), 'ft_run')
+        if tmp1[0] == -3:
+            errorFlag = 1
+            outputText = goodViewPath(os.path.relpath(tmp1[1], os.path.join(folderPath_, 'ft_run') + os.sep) + "(" + str(tmp1[2]) + "): " + tmp1[3])
+            reportFile.write(outputText)
             continue
-        if runTemp[0] == -2:
-            LogOutput(*tmpList, 4, setOfDirs[k])
+        if tmp1[0] == -4:
+            errorFlag = 1
+            outputText = goodViewPath(os.path.relpath(tmp1[1], os.path.join(folderPath_, 'ft_run') + os.sep) + ": missing 'Solver finished at'\n")
+            reportFile.write(outputText)
             continue
-        refTemp = ft_FileCheck(os.path.join(folderPath_, "ft_reference", setOfDirs[k]), 'ft_reference')
-        if refTemp[0] == -1:
+        tmp2 = ft_FileCheck(os.path.join(folderPath_, "ft_reference", listOfDirs[k]), 'ft_reference')
+        dif1 = max(tmp1[0], tmp2[0]) / min(tmp1[0], tmp2[0])
+        if dif1 > 4:
+            errorFlag = 1
+            outputText = goodViewPath(listOfDirs[k]) + ": different 'Memory Working Set Peak' (ft_run=" + str(tmp1[0]) + ", ft_reference=" + str(tmp2[0]) + ", rel.diff=" + str(round(dif1, 2) - 1) + ", criterion=4)\n"
+            reportFile.write(outputText)
             continue
-        if max(runTemp[0], refTemp[0]) / min(runTemp[0], refTemp[0]) > 4:
-            LogOutput(*tmpList, 5, setOfDirs[k], runTemp[0], refTemp[0])
+        dif2 = (max(tmp1[1], tmp2[1]) / min(tmp1[1], tmp2[1])) - 1
+        if dif2 > 0.1:
+            errorFlag = 1
+            outputText = goodViewPath(listOfDirs[k]) + ": different 'Total' of bricks (ft_run=" + str(
+                tmp1[1]) + ", ft_reference=" + str(tmp2[1]) + ", rel.diff=" + str(
+                toFixed(dif2, 2)) + ", criterion=0.1)\n"
+            reportFile.write(outputText)
             continue
-        if (max(runTemp[1], refTemp[1]) / min(runTemp[1], refTemp[1])) - 1 > 0.1:
-            LogOutput(*tmpList, 6, setOfDirs[k], runTemp[1], refTemp[1])
-            continue
-        LogOutput(*tmpList, 7)
+    reportFile.close()
+    return errorFlag
 
-
-def oneTestCheck(folderPath_, *tmpList):
-    if folderExsistCheck(folderPath_, *tmpList) != 1:
+def oneTestCheck(folderPath_):
+    tmp1 = folderExsistCheck(folderPath_, 'ft_run', 'ft_reference')
+    if tmp1 == -1:
         return -1
-    flag, buffSet = folderMatching(folderPath_, *tmpList)
-    if flag != 1:
+    tmp2 = folderMatching(folderPath_)
+    if tmp2 == -1:
         return -1
-    crossFileCheck(folderPath_, buffSet, *tmpList)
-    return 1
+    tmp3 = crossFileCheck(folderPath_, tmp2)
+    if tmp3 == 0:
+        return 0
+    else:
+        return -1
 
-tmpList = [0, 0, 0]
-
-logFolderPath = os.path.join(os.getcwd(), "logs")  # Абсолютный путь к папке log
+logFolderPath = os.path.join(os.getcwd(), 'logs')  # Абсолютный путь к папке log
 
 f = open('reference_result.txt', 'tw')  # Файл, куда будем писать результаты тестов
-
-tmpList[0] = f
 
 for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, пробегающий по всем подпапкам всех папок log
     firstSubfoldPath = os.path.join(logFolderPath, i)  # Абсолютный путь до 1-й подпапки
     for j in sorted(os.listdir(path=firstSubfoldPath)):
         secondSubfoldPath = os.path.join(firstSubfoldPath, j)  # Абсолютный путь до 2-й (текущей) папки
         relCurrentFolderPath = os.path.join(i, j)  # Относительный путь папки текущего теста (для вывода)
-        hasOutput = 0  # Флаг, был ли вывод
-        currentOutputFile = open(os.path.join(secondSubfoldPath, "report.txt"), 'tw')  # Путь к промежуточному файлу вывода
-        tmpList[1] = currentOutputFile
-        tmpList[2] = relCurrentFolderPath
 
-        if oneTestCheck(secondSubfoldPath, *tmpList) != 1:
-            continue
-
+        result = oneTestCheck(secondSubfoldPath)
+        if result == 0:
+            outputText = "OK: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n"
+            regularOuput(outputText, f)
+        elif result == -1:
+            with open(os.path.join(secondSubfoldPath, "report.txt"), 'rt') as currentOutputFile:
+                outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n" + currentOutputFile.read()
+                regularOuput(outputText, f)
 f.close()
