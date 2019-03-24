@@ -1,203 +1,83 @@
-import os
-import re
-
-pat1 = re.compile(r'Memory Working Set Current\s+=\s+([0-9]*\.[0-9]+|[0-9]+)\s+Mb, Memory Working Set Peak\s+=\s+([0-9]*\.[0-9]+|[0-9]+)\s+Mb')
-pat2 = re.compile(r'MESH::Bricks: Total=([0-9]+)\s+Gas=([0-9]+)\s+Solid=([0-9]+)\s+Partial=([0-9]+)\s+Irregular=([0-9]+)')
-
-def MFSP(src):
-    res = pat1.findall(src)
-    if res and len(res[0]) == 2:
-        return float(res[0][1])
-    else:
-        return -1
-
-def MESH(src):
-    res = pat2.findall(src)
-    if res and len(res[0]) == 5:
-        return int(res[0][0])
-    else:
-        return -1
-
-def toFixed(numObj, digits=0):
-    return f"{numObj:.{digits}f}"
-
-def regularOuput(outputText_,  *files):
-    print(outputText_, end="")
-    for file in files:
-        file.write(outputText_)
-
-def dirSetFilling(folderPath_):
-    result = set()
-    for k in os.walk(folderPath_):
-        for l in range(len(k[2])):
-            if k[2][l].endswith(".stdout") == True:
-                result.add(os.path.relpath(os.path.join(k[0], k[2][l]), folderPath_))
-    return result
-
-def goodViewPath(path):
-    return path.replace(os.sep, '/')
-
-def folderExsistCheck (absFolderPath_, *dirs):
-    for chekingFolder in dirs:
-        if os.path.exists(os.path.join(absFolderPath_, chekingFolder)) != True:
-            return chekingFolder
-    return 0
-
-def folderMatching (testFolderPath):
-    ft_runFolderPath = os.path.join(testFolderPath, "ft_run")  # Абсолютный путь до папки ft_run текущего теста
-    ft_referenceFolderPath = os.path.join(testFolderPath, "ft_reference")  # Абсолютный путь до папки ft_reference текущего теста
-    ft_runDirs = dirSetFilling(ft_runFolderPath)  # Множество, содержащее подпапки ft_run
-    ft_referenceDirs = dirSetFilling(ft_referenceFolderPath)  # Множество, содержащее подпапки ft_reference
-
-    if ft_runDirs != ft_referenceDirs:  # Вывод в случае, если *.stdout файлы в ft_run и ft_reference не совпадают
-        return list(ft_runDirs - ft_referenceDirs), list(ft_referenceDirs - ft_runDirs)
-    return 0, list(ft_runDirs)
-
-def ft_FileCheck (filePath_, type ):
-    if type == 'ft_run':
-        isFlag = 0
-    nLine = 1
-    runMaxim = -1
-    runMESH = -1
-    ft_File = open(filePath_, 'tr')
-    for line in ft_File:
-        if type == 'ft_run':
-            if "ERROR" in line.upper():
-                ft_File.close()
-                return -3, filePath_, nLine, line,
-            if line.startswith("Solver finished at"):
-                isFlag = 1
-            nLine = nLine + 1
-        tmp1 = MFSP(line)
-        if tmp1 > runMaxim:
-            runMaxim = tmp1
-            continue
-        tmp2 = MESH(line)
-        if tmp2 > 0:
-            runMESH = tmp2
-
-    ft_File.close()
-    if type == 'ft_run':
-        if isFlag == 0:
-            return -4, filePath_, nLine, line
-    return runMaxim, runMESH
-
-def crossFileCheck(folderPath_, listOfDirs):
-    result = ['0'*len(listOfDirs)]
-    for k in range(len(listOfDirs)):
-        tmp1 = ft_FileCheck(os.path.join(folderPath_, "ft_run", listOfDirs[k]), 'ft_run')
-        if tmp1[0] == -3:
-            result[k] = tmp1
-            continue
-        if tmp1[0] == -4:
-            result[k] = tmp1
-            continue
-        tmp2 = ft_FileCheck(os.path.join(folderPath_, "ft_reference", listOfDirs[k]), 'ft_reference')
-        dif1 = max(tmp1[0], tmp2[0]) / min(tmp1[0], tmp2[0])
-        if dif1 > 4:
-            result[k] = [-5, listOfDirs[k], tmp1[0], tmp2[0], dif1]
-            continue
-        dif2 = (max(tmp1[1], tmp2[1]) / min(tmp1[1], tmp2[1])) - 1
-        if dif2 > 0.1:
-            result[k] = [-7, listOfDirs[k], tmp1[1], tmp2[1], dif2]
-            continue
-        result[k] = [-8, listOfDirs[k]]
-    return result
-
-def oneTestCheck(folderPath_):
-    tmp = folderExsistCheck(folderPath_, 'ft_run', 'ft_reference')
-    if tmp != 0:
-        return -1, tmp  # Возвращает флаг, показывающий, что на тесте отсутствует папка и имя этой папки
-    tmp1, tmp2 = folderMatching(folderPath_)
-    if tmp1 != 0:
-        return -2, tmp1, tmp2  # Возвращает флаг, показывающий, что множества *.stdout файлов не одинаковы и оба множества
-    tmp3 = crossFileCheck(folderPath_, tmp2)
-    return tmp3
-
-tmpList = [0, 0, 0]
-
-logFolderPath = os.path.join(os.getcwd(), "logs")  # Абсолютный путь к папке log
-
-f = open('reference_result.txt', 'tw')  # Файл, куда будем писать результаты тестов
-
-tmpList[0] = f
-
-for i in sorted(os.listdir(path=logFolderPath)):  # Основной цикл, пробегающий по всем подпапкам всех папок log
-    firstSubfoldPath = os.path.join(logFolderPath, i)  # Абсолютный путь до 1-й подпапки
-    for j in sorted(os.listdir(path=firstSubfoldPath)):
-        secondSubfoldPath = os.path.join(firstSubfoldPath, j)  # Абсолютный путь до 2-й (текущей) папки
-        relCurrentFolderPath = os.path.join(i, j)  # Относительный путь папки текущего теста (для вывода)
-        currentOutputFile = os.path.join(secondSubfoldPath, "report.txt")  # Путь к промежуточному файлу вывода
-
-        tmp = oneTestCheck(secondSubfoldPath)
-
-        # print(tmp)
-
-        if tmp[0] == -1:
-            reportFile = open(currentOutputFile, 'tw')
-            outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n" + "directory missing: " + \
-                         tmp[1] + "\n"
-            regularOuput(outputText, f, reportFile)
-            reportFile.close()
-            continue
-
-        if tmp[0] == -2:
-            reportFile = open(currentOutputFile, 'tw')
-            step = 0
-            outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n"
-            for buff in [tmp[1], tmp[2]]:
-                if len(buff) != 0:
-                    if step == 0:
-                        outputText = outputText + "In ft_run there are extra files files not present in ft_reference: "
-                    elif step == 1:
-                        outputText = outputText + "In ft_run there are missing files present in ft_reference: "
-                    for m in range(len(buff)):
-                        outputText = outputText + "'" + goodViewPath(buff[m]) + "'"
-                        if m == (len(buff) - 1):
-                            outputText = outputText + "\n"
-                        else:
-                            outputText = outputText + " "
-                step = step + 1
-            regularOuput(outputText, f, reportFile)
-            reportFile.close()
-            continue
-
-        for k in range(len(tmp)):
-            reportFile = open(currentOutputFile, 'tw')
-            if tmp[k][0] == -3:
-                outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n" + goodViewPath(os.path.relpath(tmp[k][1], os.path.join(secondSubfoldPath, 'ft_run')) + "(" + str(tmp[k][2]) + "): " + tmp[k][3])
-                regularOuput(outputText, f, reportFile)
-                reportFile.close()
-                continue
-
-            elif tmp[k][0] == -4:
-                outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n" + goodViewPath(
-                    os.path.relpath(tmp[k][1], os.path.join(secondSubfoldPath, 'ft_run')) + ": missing 'Solver finished at'\n")
-                regularOuput(outputText, f, reportFile)
-                reportFile.close()
-                continue
-
-            elif tmp[k][0] == -5:
-                outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n" + goodViewPath(
-                    tmp[k][1]) + ": different 'Memory Working Set Peak' (ft_run=" + str(
-                    tmp[k][2]) + ", ft_reference=" + str(tmp[k][3]) + ", rel.diff=" + str(
-                    round(tmp[k][4], 2)-1) + ", criterion=4)\n"
-                regularOuput(outputText, f, reportFile)
-                reportFile.close()
-                continue
-
-            elif tmp[k][0] == -7:
-                outputText = "FAIL: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n" + goodViewPath(
-                    tmp[k][1]) + ": different 'Total' of bricks (ft_run=" + str(tmp[k][2]) + ", ft_reference=" + str(
-                    tmp[k][3]) + ", rel.diff=" + str(toFixed(tmp[k][4], 2)) + ", criterion=0.1)\n"
-                regularOuput(outputText, f, reportFile)
-                reportFile.close()
-                continue
-
-            elif tmp[k][0] == -8:
-                outputText = "OK: " + goodViewPath(relCurrentFolderPath + os.sep) + "\n"
-                regularOuput(outputText, f, reportFile)
-                reportFile.close()
-                continue
-
-f.close()
+OK: 13-ROTATED_FLOWS/00010-GCS-u_R_0_IW/
+OK: 13-ROTATED_FLOWS/00011-GCS-u_R_0_IW_base_mesh_x4/
+OK: 13-ROTATED_FLOWS/00012-GCS-u_R_0_IW_ref_boundary_lev_2/
+OK: 13-ROTATED_FLOWS/00013-GCS-u_R_0_IW_Ring/
+FAIL: 13-ROTATED_FLOWS/00015-GCS-u_R_0_MF/
+1/1.stdout(401): slv : error: Isothermal cavitation forced time step in cavitated regions = -1
+OK: 13-ROTATED_FLOWS/00016-GCS-u_R_0_MF_ref_boundary_lev_2/
+OK: 13-ROTATED_FLOWS/00040-GCS-Rotated_inflow_in_tube_5x5/
+OK: 13-ROTATED_FLOWS/00041-GCS-Rotated_inflow_in_tube_2x2_ref_boundary/
+OK: 13-ROTATED_FLOWS/00042-RRF-Rotated_inflow_in_tube_5x5/
+OK: 13-ROTATED_FLOWS/00043-RRF-Rotated_inflow_in_tube_2x2_ref_boundary/
+OK: 13-ROTATED_FLOWS/00044-RRF-u_x_const_in_tube/
+OK: 13-ROTATED_FLOWS/00050-RRF-u_G_0_IW/
+OK: 13-ROTATED_FLOWS/00051-RRF-u_G_0_IW_ref_boundary/
+OK: 13-ROTATED_FLOWS/00052-RRF-u_G_0_P/
+OK: 13-ROTATED_FLOWS/00053-RRF-u_G_0_P_ref_boundary_lev_2/
+OK: 13-ROTATED_FLOWS/00054-RRF-u_G_0_MF/
+OK: 13-ROTATED_FLOWS/00055-RRF-u_G_0_MF_ref_boundary_lev_2/
+OK: 13-ROTATED_FLOWS/00056-RRF-u_G_0_P_Sphere/
+FAIL: 13-ROTATED_FLOWS/00060-RRF-u_R_0_IW/
+directory missing: ft_reference
+FAIL: 13-ROTATED_FLOWS/00061-RRF-u_R_0_IW_ref_boundary_lev_2/
+1/1.stdout: different 'Memory Working Set Peak' (ft_run=821.0, ft_reference=77.29, rel.diff=9.62, criterion=4)
+OK: 13-ROTATED_FLOWS/00062-RRF-u_R_0_MF/
+OK: 13-ROTATED_FLOWS/00063-RRF-u_R_0_MF_ref_boundary_lev_2/
+OK: 13-ROTATED_FLOWS/00064-RRF-u_R_0_P_rotated_infinity (no dependency on iterations)/
+FAIL: 13-ROTATED_FLOWS/00065-RRF-u_R_0_P_rotated_infinity_ref_boundary_lev_2/
+1/1.stdout: different 'Total' of bricks (ft_run=1772, ft_reference=1472, rel.diff=0.20, criterion=0.1)
+OK: 13-ROTATED_FLOWS/00070-RRF-MP-FF-lousy/
+OK: 13-ROTATED_FLOWS/00080-Halfs_of_Circle_IW/
+OK: 13-ROTATED_FLOWS/00090-GCS-radial_flow_ring/
+OK: 13-ROTATED_FLOWS/00091-RRF-radial_flow_ring/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00001-_-3_-1__ins-ins_MODIFIED/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00003-_ss_ss__ins-Tfixed/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00004-_-3_ss__Tfixed-Tfixed/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00007-NSCV_MG__0_ins_Tfixed_Tfixed/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00008-R_therm_infinite_ss/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00009-_-1_tf__bc_Tfixed/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00010-_-3_-1__bc_ss/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00011-insulated_cv_aniso/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00012-two_subdoms_aniso/
+FAIL: 14-HEAT_TRANSFER_IN_SOLID/00014-HWF_on_ins_ss/
+In ft_run there are extra files files not present in ft_reference: '2/2.stdout'
+In ft_run there are missing files present in ft_reference: '1/1.stdout'
+OK: 14-HEAT_TRANSFER_IN_SOLID/00016-fluid-reservation_inc_ins/
+FAIL: 14-HEAT_TRANSFER_IN_SOLID/00017-fluid-reservation_inc_Ts/
+1/1.stdout: missing 'Solver finished at'
+OK: 14-HEAT_TRANSFER_IN_SOLID/00018-fluid-multi_reservations_inc_ins_Ts_cond/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00019-Tfixed_in_fluid/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00020-_-3_-1__CR_domain/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00021-fluid_neumann_ts_inc/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00022-Lambda_v_projections/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00101-Ball_ref1_Q_2nd_order_bc_-1/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00102-Ball_ref1_Q_2nd_order_Tfixed/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00561-thin_profile_T_across_BC_-1_ss_wall_source/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00562-thin_profile_T_across_BC_-4_-1_ss/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00563-thin_profile_T_along_BC_0_-3/
+FAIL: 14-HEAT_TRANSFER_IN_SOLID/00564-thin_profile_T_across_BC_-2_-3_-1_comp/
+1/1.stdout: missing 'Solver finished at'
+OK: 14-HEAT_TRANSFER_IN_SOLID/00565-thin_profile_T_across_BC_-2_-3_-1_inc/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00700-PCB_sandwich_across_arbitrary_Dirichlet/
+FAIL: 14-HEAT_TRANSFER_IN_SOLID/00701-PCB_sandwich_along_arbitrary_Dirichlet/
+In ft_run there are extra files files not present in ft_reference: '1/1.stdout'
+OK: 14-HEAT_TRANSFER_IN_SOLID/00703-PCB_chip_on_plate/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00803-Net_asm_ss_-4__3_nodes (TWO)/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00804-Net_asm_2_objects/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00808-Net_asm_Neumann_solid_C_eq_0_MODIFIED/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00810-Net_asm_therm_coupling/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00812-Net_asm_thin_T_across_BC_eq_-1_-3_ss_MODIFIED/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00850-Net_asm_CHT_inc/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00870-Net_asm_CHT_inc_term_coupling/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00901-TEC_Melcor_CP2-127_06_in_solid/
+OK: 14-HEAT_TRANSFER_IN_SOLID/00902-TEC_Melcor_CP2-127_06_in_solid_Tfixed/
+OK: 15-JOULE_HEATING_IN_SOLID/00010-_-1_cond_-3/
+OK: 15-JOULE_HEATING_IN_SOLID/00010-_-3_cond_-3_Neumann_fix/
+OK: 15-JOULE_HEATING_IN_SOLID/00011-_-1_cond_-3_R/
+OK: 15-JOULE_HEATING_IN_SOLID/00013-PS_-1_-1__TS_-1_-1/
+OK: 15-JOULE_HEATING_IN_SOLID/00014-PS_-1_-1__TS_-1_-1_trans/
+OK: 15-JOULE_HEATING_IN_SOLID/00020-_-1_cond_ss_cond_-3/
+FAIL: 15-JOULE_HEATING_IN_SOLID/00022-_-1_cond_ss_R_cond_-3/
+1/1.stdout(547): GG Joule Heat 1				ERROR: goal invalid
+OK: 15-JOULE_HEATING_IN_SOLID/00040-thick_profile_Dirichlet/
+OK: 15-JOULE_HEATING_IN_SOLID/00041-thin_profile_Dirichlet/
